@@ -1,5 +1,0 @@
-obj/CallDummyFunction.d:	analysis/CallDummyFunction.cpp
-obj/CallROOTFunction.d:	analysis/CallROOTFunction.cpp
-obj/CalculatChi2.d:	exe/CalculatChi2.cpp
-obj/CalculatChi2Again.d:	exe/CalculatChi2Again.cpp
-obj/HelloLUX.d:	exe/HelloLUX.cpp
