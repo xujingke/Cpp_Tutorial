@@ -23,74 +23,63 @@ DEBUG=-g
 SYSCFLAGS=-O3 -Wall $(DEBUG)
 SYSLFLAGS=-O3 -Wall $(DEBUG)
 
-CFLAGS=$(SYSCFLAGS)  -I$(PWD) $(EXTRACFLAGS) -fPIC
+#allow users to put headers in any subfolders
+ALLDIRS:=$(shell find . -type d | sed 's/\.\///' | grep -v \.git)
+ALLDIRS:=$(filter-out exe, $(ALLDIRS))
+INCLUDES:=$(addprefix -I,$(ALLDIRS))
+
+CFLAGS=$(SYSCFLAGS) $(INCLUDES) $(EXTRACFLAGS) -fPIC
 LFLAGS=$(SYSLFLAGS) $(EXTRALIBS)
 
 #use the headers only to decide whether regeneraget .d files
 HEADERS:=$(shell find . -name '*.h') $(shell find . -name '*.hh')
 #by default name all useful codes *.cpp
 ALLCPPS:=$(shell find . -type f -name "*.cpp" | sed 's/\.\///' )
-#take the base name
-BASECPPS:=$(basename $(ALLCPPS))
-BASECPPS:=$(notdir $(BASECPPS))
 
-#put all deps files in obj/
-DEPS:=$(addsuffix .d,$(BASECPPS))
-DEPS:=$(addprefix obj/,$(DEPS))
+#put all .d and .o files in the same folder as .cpp for simplicity
+ALLDEPS:= $(ALLCPPS:%.cpp=%.d)
+ALLOBJS:= $(ALLCPPS:%.cpp=%.o)
 
 #the binary files we need to build
-BINS = $(shell find exe/ -type f -name "*.cpp" | sed 's/\.\///' )
-BINS:=$(notdir $(BINS))
+BINCPPS:=$(shell find exe -type f -name "*.cpp" | sed 's/\.\///' )
+BINS:=$(notdir $(BINCPPS))
 BINS:=$(basename $(BINS))
-
-OBJS:=$(filter-out $(BINS),$(BASECPPS))
-OBJS:=$(addprefix obj/,$(OBJS))
-OBJS:=$(addsuffix .o,$(OBJS))
-
 BINS:=$(addprefix bin/,$(BINS))
+
+BINOBJS:=$(BINCPPS:%.cpp=%.o)
+OBJS:=$(filter-out $(BINOBJS),$(ALLOBJS))
 
 all: $(BINS)
 
-$(BINS): bin/%: obj/%.o $(OBJS)
+$(BINS): bin/%: exe/%.o $(OBJS)
 	@mkdir -p bin
 	$(CC)  $^ $(LFLAGS) -o $@
 
 clean:
-	rm -f obj/*.o
 	rm -f bin/*
+	find . -name \*.o -exec rm \{\} \;
 
-distclean:
-	rm -fr obj
+distclean: clean
 	rm -fr bin
+	find . -name \*.d -exec rm \{\} \;
 
-#the dependencies are specified by the DEPS files
-%.o:
+depend: $(ALLDEPS)
+
+#the dependencies are specified in the DEPS files
+%.o: 
 	$(CC) -c  $< $(CFLAGS) -o $@
 
-depend: $(DEPS)
-
-obj/deps.dep: $(ALLCPPS) $(HEADERS)
-	@mkdir -p obj
-	@for fl in $(DEPS); do echo "$${fl}:" >>obj/targets.d; done
-	@for fl in $(ALLCPPS); do echo $${fl} >>obj/dependencies.d; done
-	@paste obj/targets.d obj/dependencies.d >obj/deps.dep
-	@rm -f obj/targets.d obj/dependencies.d
-
 #the dependencies for .d files are specified in obj/deps.dep
-%.d:
-	@if [ -z $< ]; then :; else echo Making dependencies for $< ...; \
-	$(CC) $(CFLAGS) -MM $< | sed '1s/^/obj\//' >$@; fi
-
-.PHONY: all clean distclean depend
-
--include obj/deps.dep
+%.d: %.cpp $(HEADERS)
+	@echo Making dependencies for $< ...
+	@$(CC) $(CFLAGS) -MM -MT"$(<:.cpp=.o)" $< >$@
 
 ifneq ($(MAKECMDGOALS), clean)
 ifneq ($(MAKECMDGOALS), distclean)
 ifneq ($(MAKECMDGOALS), depend)
-ifneq ($(MAKECMDGOALS), obj/deps.dep)
--include $(DEPS)
+-include $(ALLDEPS)
 endif
 endif
 endif
-endif
+
+.PHONY: all clean distclean depend
